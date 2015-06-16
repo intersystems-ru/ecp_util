@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25" zv="Cache for Windows (x86-32) 2015.1 (Build 429U)" ts="2015-06-17 01:16:51">
+<Class name="Util.Proc">
+<Super>%Library.RegisteredObject</Super>
+<TimeChanged>63720,3178.711364</TimeChanged>
+<TimeCreated>63719,74325.784464</TimeCreated>
+
+<Method name="Version">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[	q "2.5.777"
+]]></Implementation>
+</Method>
+
+<Method name="CCM">
+<Description><![CDATA[
+Remote Class Method (or $$-function) call on ECP server (if exists) or locally.
+<br> Sample:  s p2="$zu(86)" w ##class(Util.Proc).CCM("$$ccm^ztest","$sy",p2) ; 2 args
+<br> Sample:  =##class(Util.Proc).CCM("##class(Util.Proc).SetupAddPriv") ; no args
+<br> Returns: 
+<br> remote class method (or $$-function) call result
+<br> or decoded %Status on error(s);
+<br> NB: long string (>32K) can't be returned as it causes <LIST> error.
+
+<br> E.g., if we have a function $$sampleCCM^ztest:
+<br>
+<br>sampleCCM(sfn1="",sfn2="")
+<br>     n rc1,rc2
+<br>     s rc1="par 1 missed", rc2="par 2 missed"
+<br>     if sfn1'="" s @("rc1="_sfn1)
+<br>     if sfn2'="" s @("rc2="_sfn2)
+<br>     q "rc1="_rc1_" rc2="_rc2
+<br>
+<br> we can call it "universally":
+<br>
+<br>   set p2="$zu(86)", rc=##class(Util.Proc).CCM("$$sampleCCM^ztest","$sy",p2) write rc
+<br>
+<br> when called from ECP client, it runs on ECP server; otherwise it runs locally.
+
+<br>Russian: Вызов произвольного метода класса или $$-функции на сервере ECP (если существует) или локально.
+<br> Пример:  s p2="$zu(86)" w ##class(Util.Proc).CCM("$$ccm^ztest","$sy",p2) ; 2 args
+<br> Пример:  =##class(Util.Proc).CCM("##class(Util.Proc).SetupAddPriv") ; no args
+<br> Returns: 
+<br> результат вызова метода класса или $$-функции на сервере ECP
+<br> NB: длинная строка не может быть возвращена! будет ошибка <LIST>
+<br> или расшифрованный %Status, если произошла ошибка (при вызове или при set @callstr) (???)]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Argv...</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<PublicList>zzzlbsc,zzzrc</PublicList>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+ // извлекаем аргументы из Argv (не отличая строки от чисел - всё считаем строками)
+ s zzzsc="",callstr="" // zzzsc="" as it is decoded %Status until otherwise is explicitly stated
+ set lbSer=..ECPServer(.sc1)
+ if lbSer'="" { // running on ECP client
+	 
+    s callstr="zzzlbsc=..RPC("""_$lg(lbSer,2)_""","""_$lg(lbSer,3)_""",.sc,""CCMlocal"
+	for i=1:1:Argv {
+		s callstr=callstr_""","""_Argv(i)
+	}
+	set callstr=callstr_""")"
+	try {
+		set @callstr
+	} catch {
+		s zzzsc="ERROR #5002: CCM - remote call of: "_callstr_" $ze="_$ze ;am20150520
+	}
+	quit:zzzsc'="" zzzsc ;am20150520
+	set zzzsc=$lg(zzzlbsc) // zzzsc as %Status from this place
+    quit $s(zzzsc:$lg($lg(zzzlbsc,3)),1:$system.Status.GetErrorText(zzzsc)) ;am20150520
+    
+ } else {
+	
+	set callstr="zzzrc=",zzzsc="",zzzrc=""
+	for i=1:1:Argv {
+		s callstr=callstr_$S(i=1:Argv(i)_"(",i=2:""""_Argv(i)_"""",1:","""_Argv(i)_"""") ;ser20150423
+	}
+	s callstr=callstr_")" ;ser20150423
+	try {
+		set @callstr
+	} catch {
+		s zzzsc="ERROR #5002: CCM - local call of: "_callstr_" $ze="_$ze ;am20150520
+	}
+	quit:zzzsc'="" zzzsc
+	quit zzzrc
+ }
+]]></Implementation>
+</Method>
+
+<Method name="CCMlocal">
+<Description>
+Locally execute classmethod of $$function return RPC-compatible: $lb(zzzsc,$lb(result))</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Argv...</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<PublicList>zzzlbsc,zzzrc</PublicList>
+<ReturnType>%List</ReturnType>
+<Implementation><![CDATA[
+	s zzzWHO="CCMlocal"
+	set callstr="zzzrc=",zzzsc=1,zzzrc=""
+	
+	for i=1:1:Argv {
+		s callstr=callstr_$S(i=1:Argv(i)_"(",i=2:""""_Argv(i)_"""",1:","_""""_Argv(i)_"""") ;ser20150505
+	}
+	s callstr=callstr_")" ;ser20150505
+	
+	try {
+		set @callstr
+	} catch {
+		s zzzsc=$$$ERROR(5002,"CCMlocal call of: "_callstr_" $ze="_$ze)
+	}
+	quit $lb(zzzsc,$lb(zzzrc))
+]]></Implementation>
+</Method>
+
+<Method name="ECPServer">
+<Description><![CDATA[
+Returns ECP: $lb(Server Name (in lower case), IP, Port, HostName) 
+<br> set ser=##class(Util.Proc).ECPServer(.sc)
+<br> s ser=$classmethod("Util.Proc", "ECPServer", .sc) zw ser if 'sc d $system.Status.DisplayError(sc) ]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&sc]]></FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>%List</ReturnType>
+<Implementation><![CDATA[
+	s sc=1
+	s server= $zconvert( $p(##class(%SYS.Namespace).GetGlobalDest(),"^"), "L")
+	if server'="" {
+		s slist=..ECP("ServerList")
+		s sc=$lg(slist,1), slist=$lg(slist,2)
+		if sc,($ll(slist)>0) {
+			for i=1:1:$ll(slist) {
+				if $lg($lg(slist,i),1)=server { // set up server info
+					s server=$lg(slist,i) 
+					g ECPfound
+				}
+			}
+		}
+		set sc=$$$ERROR(5001,"ECP server not found"), server=""
+	} else {
+		set sc=$$$ERROR(5001,"Running on ECP server")
+	}
+ECPfound
+	quit server
+]]></Implementation>
+</Method>
+
+<Method name="ECP">
+<Description><![CDATA[
+Get ECP related $lb($lb(Server Name (in lower case!),IP Address,IP Port[,Host Name]),...) list - the last item is returned for ServerList
+<br> s list=##class(Util.Proc).ECP("ClientList") zw list // client list (run on server); NB: auxillary Port is returned
+<br> s list=##class(Util.Proc).ECP("ServerList") zw list // server list (run on client)]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>request="ClientList"</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>%List</ReturnType>
+<Implementation><![CDATA[
+ new $namespace s $namespace="%SYS"
+ s str = ""
+ s rset=##class(%ResultSet).%New("SYS.ECP:"_request)
+ s sc=rset.Execute()
+ if sc {
+   if request = "ClientList" {
+    	// Now fetch the results
+    	While rset.Next() {
+		  s strcli=$lb( $lb( $zconvert(rset.Data("Client Name"),"L"), rset.Data("IP Address"), rset.Data("IP Port")))
+       	  if strcli'=$lb($lb("","","")) s str=str_strcli // skip empty strings ;am20150507
+    	}
+    	d rset.Close()
+   } else { // ServerList
+    	// Now fetch the results
+    	While rset.Next() {
+	      s hn=rset.Data("Host Name")
+	      if ##class(%SYSTEM.INetInfo).AddrType(hn) { s hn=$p(##class(%SYSTEM.INetInfo).AddrToHostName(##class(%SYSTEM.INetInfo).TextAddrToBinary(hn)),".") }
+       	  s str=str_$lb( $lb( $zconvert(rset.Data("Server Name"),"L"), rset.Data("IP Address"), rset.Data("IP Port"), $zconvert(hn,"L")) )
+    	}
+    	d rset.Close()
+   }
+ }
+ quit $lb(sc, str)
+]]></Implementation>
+</Method>
+
+<Method name="RPC">
+<Description><![CDATA[
+Remote ClassMethod Call
+<br> In:  IP, Port, ClassMethod (of the current class), Args... (of the Classmethod)
+<br> ClassMethod should return: $lb(CMStatus, $lb(CMresults...))
+<br>
+<br> Out: Status (if $$$ISERR(Status), it can be either connect/invoke failure or the ClassMethod returned status
+<br> if $$$ISOK(Status), return_value = $lb(IP, Port, $lb(CMresults...)), else return_value = ""
+<br>
+<br> Sample:
+<br> set EcpCli=##class(Util.Proc).RPC("192.168.10.19", 1972, .sc, "ECP")]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[IP,Port,&Status:%Status,ClassMethod,Argv...:%List]]></FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>%List</ReturnType>
+<Implementation><![CDATA[
+	#Include %apiCBIND
+	s plist=""
+	s rc=##class(%Net.RemoteConnection).%New()
+	s Status=rc.Connect(IP, $namespace, Port) if 'Status g RCMCq
+	if $g(Argv, 0)>0 {
+		Set Status=rc.ResetArguments() if 'Status g RCMCq
+		for iarg=1:1:Argv {
+			Set Status=rc.AddArgument($g(Argv(iarg))) if 'Status g RCMCq ;, $$$cbindListId
+		}
+	}
+	s Status=rc.InvokeClassMethod($classname(), ClassMethod, .plist, 1, $$$cbindListId) if 'Status g RCMCq
+	d rc.Disconnect()
+	if Status { 
+		set Status=$lg(plist,1)
+		if Status set plist=$lb(IP, Port, $lg(plist,2))
+	}
+RCMCq
+	q plist
+]]></Implementation>
+</Method>
+
+<Method name="RunJob">
+<Description><![CDATA[
+Run Job (passing paramaters) on ECP server (if exists) or locally. Class method or $$-function can be used as entry point.
+
+<br> In: entry point [, arg1[, ...]
+<br> Returns: $lb(Status,pid) where Status is a status of Job start (%Status); if Status, pid=$zchild, else pid=0.
+<br>
+<br> E.g., if we have an entry point runjob^ztest:
+<br>
+<br>runjob ;
+<br>	s p1=$r(10),p2=$zhex(10+$r(20))
+<br>	s rc=##class(Util.Proc).RunJob("runjobdo^ztest",p1,p2,"perche?") zw rc
+<br>	zw ^zzzrunjobdo
+<br>	set pid=$lg(rc,$ll(rc)) w "check running pid = "_pid," "
+<br>	set rc=##class(Util.Proc).CheckJob(pid) zw rc
+<br>    w !
+<br>	q
+<br>runjobdo(a="",b="",c="")
+<br>	set ^zzzrunjobdo=$zt($p($h,",",2),1)_" "_$zu(110)_" $zhex("_a_")="_$zhex(a)_" $zhex("_b_")="_$zhex(b)_" "_$g(c)
+<br>	q
+<br>
+<br> we can call it "universally" as it runs on ECP server if called from ECP client, otherwise it runs locally:
+<br>
+<br>	s rc=##class(Util.Proc).RunJob("runjobdo^ztest",1,2,"perche?"),pid=$lg(rc,$ll(rc)) zw rc zw pid w ! zw ^zzzrunjobdo 
+<br>    s rc=##class(Util.Proc).CheckJob(pid) zw rc w:$lg(rc,$ll(rc)) "pid="_pid_" is running",!
+<br> 
+<br>Russian: Запуск процесса на сервере ECP (если существует) или локально. Можно запускать программы с точки входа и методы класса.]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Argv...</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<PublicList>lbsc</PublicList>
+<ReturnType>%List</ReturnType>
+<Implementation><![CDATA[
+ // извлекаем аргументы из Argv (не отличая строки от чисел - всё считаем строками)
+ s sc=1,callstr=""
+ set lbSer=..ECPServer(.sc1)
+ if lbSer'="" { // running on ECP client
+	 
+    s callstr="lbsc=..RPC("""_$lg(lbSer,2)_""","""_$lg(lbSer,3)_""",.sc,""RunJob"
+	for i=1:1:Argv {
+		s callstr=callstr_""","""_Argv(i)
+	}
+	set callstr=callstr_""")"
+	set @callstr
+    quit $s(sc:$lb(sc)_lbsc,1:$lb(sc,0)) // should add $lb(sc) to conform with local call return
+    
+ } else {
+	
+	for i=1:1:Argv {
+		s callstr=callstr_$S(i=1:Argv(i)_"(",i=2:""_Argv(i)_"",1:","""_Argv(i)_"""")
+	}
+	set callstr=callstr_")::10"
+	try {
+		job @callstr
+		if '$t s sc=$$$ERROR(5001,"Could not start a job on "_$zu(110))
+	} catch {
+		s sc=$$$ERROR(5002,"Error on: job @"_callstr_" on "_$zu(110)_" $ze="_$ze) ;am20150520
+	}
+	quit $s(sc:$lb(1,$zchild),1:$lb(sc,0))
+}
+]]></Implementation>
+</Method>
+
+<Method name="CheckJob">
+<Description><![CDATA[
+Check Job aliveness on ECP server (if exists) or locally.
+<br> In: Job's PID
+<br> Returns: 
+<br> on remote call: $lb(Status, server_ip, server_port, rc), where rc=1/0; Status = status code of ..RPC
+<br> on local call:  $lb(Status, rc), where rc=1/0; Status=1.
+<br> Sample:
+<br> s pid=14512,rc=##class(Util.Proc).CheckJob(pid) zw rc
+<br> 
+<br> Russian: Проверка, жив ли процесс на сервере данных (если сервер данных нашёлся) или локально.]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pid</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<PublicList>lbsc</PublicList>
+<ReturnType>%List</ReturnType>
+<Implementation><![CDATA[
+ s sc=1,callstr=""
+ set lbSer=..ECPServer(.sc1)
+ if lbSer'="" { // running on ECP client
+	 
+    s callstr="lbsc=..RPC("""_$lg(lbSer,2)_""","""_$lg(lbSer,3)_""",.sc,""CheckJob"","_pid_")"
+	set @callstr
+    quit $s(sc:$lb(sc)_lbsc,1:$lb(sc,0)) // should add $lb(sc) to conform with local call return
+    
+ } else {
+	
+	quit $lb(1,$d(^$job(pid)))
+
+ }
+]]></Implementation>
+</Method>
+</Class>
+</Export>
